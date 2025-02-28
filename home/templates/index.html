@@ -108,12 +108,14 @@
 
         <ul class="list-group user-list" id="recent-chats">
             {% for chat in recent_chats %}
-            <li class="list-group-item user-item" id="chat-{{ chat.username }}" onclick="selectUser('{{ chat.username }}')">
+            <li class="list-group-item user-item" id="chat-{{chat.username}}"
+                onclick="selectUser('{{ chat.username }}')">
                 <div class="user-details" style="display: flex; flex-direction: column; width: 100%;">
                     <div class="up-row"
                         style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                         <strong>@ {{ chat.username }}</strong>
-                        <span class="timestamp text-muted" style="white-space: nowrap; margin-left: auto;">{{ chat.latest_message_timestamp|default:"" }}</span>
+                        <span class="timestamp text-muted" style="white-space: nowrap; margin-left: auto;">
+                            {{ chat.latest_message_timestamp|default:"" }}</span>
                     </div>
                     <div class="last-message"
                         style="width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
@@ -158,10 +160,34 @@
         }
 
         ws.onmessage = function (event) {
+            if (!selectedUser) return;
             const data = JSON.parse(event.data);
-            const messageType = data.sender__username === selectedUser ? 'received' : 'sent';
-            //displayMessage(data.messages, messageType);
-            updateRecentChats(data.sender__username, data.message, new Date().toLocaleString());
+
+            // Handle chat history (if present)
+            if (data.type === "chat.history" || data.messages) {
+                data.messages.forEach(msg => {
+                    const messageType = msg.sender__username === selectedUser ? "received" : "sent";
+                    displayMessage(msg, messageType);
+                });
+            }
+
+            // Handle new incoming message (if present)
+            if (data.type === "chat.message" || (data.sender && data.message)) {
+                const messageType = data.sender === selectedUser ? "received" : "sent";
+                displayMessage(data.message, messageType);
+                updateRecentChats(data.sender, data.message, data.timestamp);
+            }
+
+            // Handle message confirmation for sender (if present)
+            if (data.type === "chat.sent" || (data.receiver && data.message)) {
+                //displayMessage(data.message, "sent");
+                updateRecentChats(data.receiver, data.message, data.timestamp);
+            }
+
+            // Handle error messages (if present)
+            if (data.type === "error" && data.message) {
+                console.error("Error:", data.message);
+            }
         };
 
         function displayMessage(message, type) {
@@ -187,7 +213,6 @@
 
         function selectUser(username) {
             selectedUser = username;
-            console.log('selectedUser:', selectedUser); //
             document.getElementById('chat-title').textContent = `Chat with ${username}`;
             document.getElementById('chat-box').style.display = "flex";
             document.querySelector('.input-group').style.display = "flex";
@@ -204,8 +229,6 @@
                 type: 'GET',
                 data: { username: username },
                 success: function (response) {
-                    console.log('Fetching chat history:', response);
-
                     if (response.chat_history && response.chat_history.length > 0) {
                         displayChatHistory(response.chat_history); // Call function to update UI
                     } else {
