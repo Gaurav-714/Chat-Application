@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 33%;
+            border-right: 1px solid #ccc;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .chat-container {
+            width: 67%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 15px;
+        }
+
+        .chat-box {
+            flex-grow: 1;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            display: none;
+            /* Initially hidden */
+            flex-direction: column;
+            border-radius: 10px;
+        }
+
+        .message {
+            padding: 8px 12px;
+            margin: 5px 0;
+            border-radius: 10px;
+            max-width: 60%;
+            word-wrap: break-word;
+            display: inline-block;
+        }
+
+        .received {
+            background-color: #e1f5fe;
+            align-self: flex-start;
+            text-align: left;
+        }
+
+        .sent {
+            background-color: #d1f0d7;
+            align-self: flex-end;
+            text-align: right;
+        }
+
+        .last-message {
+            font-size: 18px;
+            color: rgb(175, 175, 175);
+            margin-top: 3px;
+        }
+
+        .timestamp {
+            font-size: 16px;
+            color: rgb(175, 175, 175);
+        }
+
+
+        .user-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+
+        .user-item {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .user-item:hover {
+            background-color: #f0f0f0;
+        }
+
+        .input-group {
+            display: none;
+            /* Initially hidden */
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+
+<body>
+    <div class="sidebar">
+        <h4>Chats</h4>
+        <input type="text" class="form-control mb-3" id="search-user" placeholder="Search users...">
+
+        <ul class="list-group user-list" id="recent-chats">
+            {% for chat in recent_chats %}
+            <li class="list-group-item user-item" id="chat-{{ chat.username }}" onclick="selectUser('{{ chat.username }}')">
+                <div class="user-details" style="display: flex; flex-direction: column; width: 100%;">
+                    <div class="up-row"
+                        style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <strong>@ {{ chat.username }}</strong>
+                        <span class="timestamp text-muted" style="white-space: nowrap; margin-left: auto;">{{ chat.latest_message_timestamp|default:"" }}</span>
+                    </div>
+                    <div class="last-message"
+                        style="width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                        {{ chat.latest_message_content|default:"No messages yet"|truncatechars:80 }}
+                    </div>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="chat-container">
+        <h4 id="chat-title">Select a user to chat</h4>
+        <div class="chat-box" id="chat-box"></div>
+        <div class="input-group mt-3">
+            <input type="text" id="message-input" class="form-control" placeholder="Type a message...">
+            <button class="btn btn-dark" id="send-message">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const ws = new WebSocket('ws://' + window.location.host + '/ws/chat/');
+        let selectedUser = null;
+
+        document.getElementById('send-message').addEventListener('click', sendMessage);
+        document.getElementById('message-input').addEventListener('keydown', function (event) {
+            if (event.key === "Enter") sendMessage();
+        });
+
+        function sendMessage() {
+            const messageInput = document.getElementById('message-input');
+            const message = messageInput.value.trim();
+            if (!selectedUser || message === "") return;
+
+            const timestamp = new Date().toLocaleString();
+            ws.send(JSON.stringify({ receiver: selectedUser, message: message }));
+
+            displayMessage(message, 'sent');
+            updateRecentChats(selectedUser, message, timestamp);
+
+            messageInput.value = "";
+        }
+
+        ws.onmessage = function (event) {
+            const data = JSON.parse(event.data);
+            const messageType = data.sender__username === selectedUser ? 'received' : 'sent';
+            //displayMessage(data.messages, messageType);
+            updateRecentChats(data.sender__username, data.message, new Date().toLocaleString());
+        };
+
+        function displayMessage(message, type) {
+            const chatBox = document.getElementById('chat-box');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = message;
+            messageElement.classList.add('message', type);
+            chatBox.appendChild(messageElement);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function displayChatHistory(messages) {
+            if (!selectedUser) return; // Stop execution if no user is selected
+
+            const chatBox = document.getElementById('chat-box');
+            chatBox.innerHTML = ""; // Clear previous messages
+
+            messages.forEach(msg => {
+                const type = msg.sender__username === selectedUser ? 'received' : 'sent';
+                displayMessage(msg.content, type);
+            });
+        }
+
+        function selectUser(username) {
+            selectedUser = username;
+            console.log('selectedUser:', selectedUser); //
+            document.getElementById('chat-title').textContent = `Chat with ${username}`;
+            document.getElementById('chat-box').style.display = "flex";
+            document.querySelector('.input-group').style.display = "flex";
+            document.getElementById('search-user').value = "";  // Reset search bar
+            $('#recent-chats').show(); // Ensure recent chats remain visible
+
+            // Fetch chat history and display it immediately when user is selected
+            fetchChatHistory(username);
+        }
+
+        function fetchChatHistory(username) {
+            $.ajax({
+                url: '{% url "chat_view" %}',
+                type: 'GET',
+                data: { username: username },
+                success: function (response) {
+                    console.log('Fetching chat history:', response);
+
+                    if (response.chat_history && response.chat_history.length > 0) {
+                        displayChatHistory(response.chat_history); // Call function to update UI
+                    } else {
+                        document.getElementById('chat-box').innerHTML = "<p>No messages yet.</p>"; // Handle empty chat
+                    }
+                },
+                error: function (xhr, status, error) {
+                    console.error('Error fetching chat history:', error);
+                }
+            });
+        }
+
+        function updateRecentChats(username, message, timestamp) {
+            let chatItem = document.getElementById(`chat-${username}`);
+
+            if (!chatItem) {
+                $('#recent-chats').prepend(`
+            <li class="list-group-item user-item" id="chat-${username}" onclick="selectUser('${username}')">
+                <div class="user-details" style="display: flex; flex-direction: column; width: 100%;">
+                    <!-- Username & Timestamp Row -->
+                    <div class="up-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <strong>@ ${username}</strong>
+                        <span class="timestamp text-muted" style="white-space: nowrap; margin-left: auto;">${timestamp}</span>
+                    </div>
+                    <!-- Latest Message Below -->
+                    <div class="last-message" style="width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                        ${message}
+                    </div>
+                </div>
+            </li>
+        `);
+            } else {
+                // Update existing chat item
+                chatItem.querySelector('.last-message').textContent = message;
+                chatItem.querySelector('.timestamp').textContent = timestamp;
+
+                // Move the updated chat item to the top
+                $('#recent-chats').prepend(chatItem);
+            }
+        }
+
+        $(document).ready(function () {
+            $('#search-user').on('input', function () {
+                let query = $(this).val().trim();
+                if (query.length === 0) {
+                    $('#recent-chats').show();
+                    return;
+                }
+                $.ajax({
+                    url: '{% url "chat_view" %}',
+                    type: 'GET',
+                    data: { q: query },
+                    success: function (response) {
+                        $('#recent-chats').html('');
+                        response.user_list.forEach(user => {
+                            $('#recent-chats').append(
+                                `<li class="list-group-item user-item" onclick="selectUser('${user.username}')">
+                                    <div class="user-details">
+                                        <strong>${user.username}</strong>
+                                        <span class="last-message">No messages yet</span>
+                                    </div>
+                                    <span class="timestamp"></span>
+                                </li>`
+                            );
+                        });
+                        $('#recent-chats').show(); // Keep search results visible
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>
