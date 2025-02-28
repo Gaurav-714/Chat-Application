@@ -217,6 +217,7 @@
             document.getElementById('chat-box').style.display = "flex";
             document.querySelector('.input-group').style.display = "flex";
             document.getElementById('search-user').value = "";  // Reset search bar
+            $('#recent-chats').html(originalChatList); // Restore original chat list
             $('#recent-chats').show(); // Ensure recent chats remain visible
 
             // Fetch chat history and display it immediately when user is selected
@@ -270,13 +271,18 @@
             }
         }
 
+        let originalChatList = $('#recent-chats').html(); // Store original chat list
+
         $(document).ready(function () {
             $('#search-user').on('input', function () {
                 let query = $(this).val().trim();
+
                 if (query.length === 0) {
+                    $('#recent-chats').html(originalChatList); // Restore original chat list
                     $('#recent-chats').show();
                     return;
                 }
+
                 $.ajax({
                     url: '{% url "chat_view" %}',
                     type: 'GET',
@@ -288,13 +294,11 @@
                                 `<li class="list-group-item user-item" onclick="selectUser('${user.username}')">
                                     <div class="user-details">
                                         <strong>${user.username}</strong>
-                                        <span class="last-message">No messages yet</span>
                                     </div>
-                                    <span class="timestamp"></span>
                                 </li>`
                             );
                         });
-                        $('#recent-chats').show(); // Keep search results visible
+                        $('#recent-chats').show();
                     }
                 });
             });
