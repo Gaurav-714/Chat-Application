@@ -62,9 +62,21 @@
             text-align: right;
         }
 
+        .receivingPreview {
+            background-color: #e1f5fe;
+            align-self: flex-start;
+            text-align: left;
+        }
+
+        .sendingPreview {
+            background-color: #d1f0d7;
+            align-self: flex-end;
+            text-align: right;
+        }
+
         .last-message {
             font-size: 18px;
-            color: rgb(175, 175, 175);
+            color: rgb(175, 175, 175);;
             margin-top: 3px;
         }
 
@@ -72,7 +84,6 @@
             font-size: 16px;
             color: rgb(175, 175, 175);
         }
-
 
         .user-list {
             max-height: 400px;
@@ -117,7 +128,7 @@
                         <span class="timestamp text-muted" style="white-space: nowrap; margin-left: auto;">
                             {{ chat.latest_message_timestamp|default:"" }}</span>
                     </div>
-                    <div class="last-message"
+                    <div class="last-message text-muted"
                         style="width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
                         {{ chat.latest_message_content|default:"No messages yet"|truncatechars:80 }}
                     </div>
@@ -129,16 +140,92 @@
 
     <div class="chat-container">
         <h4 id="chat-title">Select a user to chat</h4>
-        <div class="chat-box" id="chat-box"></div>
+        <div class="chat-box" id="chat-box">
+            <div id="typing-preview" class="message typing-message"></div> 
+        </div>
         <div class="input-group mt-3">
             <input type="text" id="message-input" class="form-control" placeholder="Type a message...">
-            <button class="btn btn-dark" id="send-message">Send</button>
+            <button class="btn btn-secondary" id="send-message">Send</button>
         </div>
     </div>
 
     <script>
-        const ws = new WebSocket('ws://' + window.location.host + '/ws/chat/');
+        const socket = new WebSocket('ws://' + window.location.host + '/ws/chat/');
+        const socket_2 = new WebSocket('ws://' + window.location.host + '/ws/chat-preview/');
+
         let selectedUser = null;
+        document.getElementById("message-input").addEventListener("input", sendMessagePreview);
+
+        socket_2.onmessage = function (event) {
+            if (!selectedUser) return;
+            
+            const data = JSON.parse(event.data);
+            if (data.type !== "chat.preview") return;
+            removeTypingPreview();
+            
+            if (data.message !== "") {
+                displayMessagePreview(data.message, data.sender);
+            }
+        };
+
+        let typingTimer;  // Timer for debounce
+        const typingDelay = 300;  // Delay in milliseconds
+        let lastPreviewMessage = ""; 
+
+        function sendMessagePreview() {
+            clearTimeout(typingTimer);
+            let message_preview = document.getElementById("message-input").value.trim();
+
+            // If message is empty, remove preview and return
+            if (!selectedUser || message_preview === "") {
+                    removeTypingPreview();
+                    lastPreviewMessage = ""; 
+                    return;
+                }
+
+            typingTimer = setTimeout(() => {
+                if (message_preview === lastPreviewMessage) {
+                    return;
+                }
+                lastPreviewMessage = message_preview;
+
+                socket_2.send(JSON.stringify({
+                    message_preview: message_preview,
+                    receiver: selectedUser
+                }));
+            }, typingDelay);
+        }
+
+        function displayMessagePreview(message, sender = "") {
+            const chatBox = document.getElementById("chat-box");
+            let typingPreview = document.getElementById("typing-preview");
+
+            // If the message is empty, remove preview and return
+            if (message.trim() === "") {
+                removeTypingPreview();
+            }
+
+            // If preview doesn't exist, create one
+            if (!typingPreview) {
+                typingPreview = document.createElement("div");
+                typingPreview.id = "typing-preview";
+                typingPreview.classList.add("message", "receivingPreview");
+                chatBox.appendChild(typingPreview);
+            }
+
+            // Update preview message
+            typingPreview.textContent = `@${sender} is typing: ${message}`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function removeTypingPreview() {
+            const typingPreview = document.getElementById("typing-preview");
+
+            if (typingPreview) {
+                typingPreview.remove();
+            }
+        }
+
 
         document.getElementById('send-message').addEventListener('click', sendMessage);
         document.getElementById('message-input').addEventListener('keydown', function (event) {
@@ -148,10 +235,11 @@
         function sendMessage() {
             const messageInput = document.getElementById('message-input');
             const message = messageInput.value.trim();
+            const timestamp = new Date().toLocaleString();
+            
             if (!selectedUser || message === "") return;
 
-            const timestamp = new Date().toLocaleString();
-            ws.send(JSON.stringify({ receiver: selectedUser, message: message }));
+            socket.send(JSON.stringify({ receiver: selectedUser, message: message }));
 
             displayMessage(message, 'sent');
             updateRecentChats(selectedUser, message, timestamp);
@@ -159,12 +247,15 @@
             messageInput.value = "";
         }
 
-        ws.onmessage = function (event) {
+        socket.onmessage = function (event) {
             if (!selectedUser) return;
             const data = JSON.parse(event.data);
 
+            // Ignore typing preview messages in this WebSocket
+            if (data.type === "chat.preview") return;
+
             // Handle chat history (if present)
-            if (data.type === "chat.history" || data.messages) {
+            if (data.type === "chat.history" || data.messages) {object
                 data.messages.forEach(msg => {
                     const messageType = msg.sender__username === selectedUser ? "received" : "sent";
                     displayMessage(msg, messageType);
@@ -191,10 +282,14 @@
         };
 
         function displayMessage(message, type) {
+            removeTypingPreview();
+
             const chatBox = document.getElementById('chat-box');
             const messageElement = document.createElement('div');
+
             messageElement.textContent = message;
             messageElement.classList.add('message', type);
+
             chatBox.appendChild(messageElement);
             chatBox.scrollTop = chatBox.scrollHeight;
         }
