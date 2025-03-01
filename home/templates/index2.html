@@ -158,12 +158,19 @@
 
         socket_2.onmessage = function (event) {
             if (!selectedUser) return;
-            
+
             const data = JSON.parse(event.data);
+
+            if (data.type === "chat.remove_preview") {
+                removeTypingPreview();  // Ensure preview is removed on the receiver's screen
+                return;
+            }
+
             if (data.type !== "chat.preview") return;
-            removeTypingPreview();
-            
-            if (data.message !== "") {
+
+            removeTypingPreview(); // Remove any existing preview
+
+            if (data.message.trim() !== "") {
                 displayMessagePreview(data.message, data.sender);
             }
         };
@@ -174,35 +181,45 @@
 
         function sendMessagePreview() {
             clearTimeout(typingTimer);
+
             let message_preview = document.getElementById("message-input").value.trim();
 
-            // If message is empty, remove preview and return
-            if (!selectedUser || message_preview === "") {
-                    removeTypingPreview();
-                    lastPreviewMessage = ""; 
-                    return;
-                }
+            if (!selectedUser) return;
 
-            typingTimer = setTimeout(() => {
-                if (message_preview === lastPreviewMessage) {
-                    return;
-                }
-                lastPreviewMessage = message_preview;
+            if (message_preview === "") {
+                removeTypingPreview();  // Remove preview from sender's screen
 
+                // Send a forced "remove preview" message to the backend
                 socket_2.send(JSON.stringify({
-                    message_preview: message_preview,
+                    type: "chat.remove_preview",
                     receiver: selectedUser
                 }));
-            }, typingDelay);
+
+                lastPreviewMessage = "";  // Reset last message
+                return;
+            }
+
+            // Avoid unnecessary re-sending of the same preview
+            if (message_preview === lastPreviewMessage) return;
+
+            lastPreviewMessage = message_preview;
+
+            socket_2.send(JSON.stringify({
+                type: "chat.preview",
+                message_preview: message_preview,
+                receiver: selectedUser
+            }));
         }
 
         function displayMessagePreview(message, sender = "") {
             const chatBox = document.getElementById("chat-box");
             let typingPreview = document.getElementById("typing-preview");
 
-            // If the message is empty, remove preview and return
-            if (message.trim() === "") {
+            // If input is empty, remove preview but DO NOT send an empty preview
+            if (message === "") {
                 removeTypingPreview();
+                lastPreviewMessage = "";
+                return;
             }
 
             // If preview doesn't exist, create one
