@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat App</title>
+    <title>Chat Application</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
@@ -100,7 +100,7 @@
         }
 
         .user-list {
-            max-height: 400px;
+            max-height: 800px;
             overflow-y: auto;
             border-top: 1px solid #ccc;
             padding-top: 10px;
@@ -168,7 +168,7 @@
     <div id="hamburger-menu" onclick="toggleSidebar()">☰</div>
 
     <div class="sidebar" id="sidebar">
-        <input type="text" class="form-control mb-3" id="search-user" placeholder="Search users..." >
+        <input type="text" class="form-control mb-2" id="search-user" placeholder="Search users..." >
 
         <ul class="list-group user-list" id="recent-chats">
             {% for chat in recent_chats %}
@@ -177,7 +177,7 @@
                 <div class="user-details" style="display: flex; flex-direction: column; width: 100%;">
                     <div class="up-row"
                         style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                        <strong>@ {{ chat.username|truncatechars:10 }}</strong>
+                        <strong>@ {{ chat.username|truncatechars:15 }}</strong>
                         <span class="timestamp text-muted" style="white-space: nowrap; margin-left: auto;">
                             {{ chat.latest_message_timestamp|default:"" }}</span>
                     </div>
@@ -208,12 +208,6 @@
             let chatContainer = document.getElementById("chat-container");
             
             sidebar.classList.toggle("closed");
-            
-            if (sidebar.classList.contains("closed")) {
-                chatContainer.style.width = "100%";
-            } else {
-                chatContainer.style.width = "65%";
-            }
         }
         
         const socket = new WebSocket('ws://' + window.location.host + '/ws/chat/');
@@ -354,7 +348,6 @@
 
             // Handle message confirmation for sender (if present)
             if (data.type === "chat.sent" || (data.receiver && data.message)) {
-                //displayMessage(data.message, "sent");
                 updateRecentChats(data.receiver, data.message, data.timestamp);
             }
 
@@ -397,7 +390,6 @@
             document.getElementById('search-user').value = "";  // Reset search bar
             $('#recent-chats').html(originalChatList); // Restore original chat list
             $('#recent-chats').show(); // Ensure recent chats remain visible
-
             
             fetchChatHistory(username); // Fetch chat history and display it immediately when user is selected
             toggleSidebar() // Close the sidebar when user is selected
@@ -410,9 +402,7 @@
                 data: { username: username },
                 success: function (response) {
                     if (response.chat_history && response.chat_history.length > 0) {
-                        displayChatHistory(response.chat_history); // Call function to update UI
-                    } else {
-                        document.getElementById('chat-box').innerHTML = "<p>No messages yet.</p>"; // Handle empty chat
+                        displayChatHistory(response.chat_history); 
                     }
                 },
                 error: function (xhr, status, error) {
@@ -428,18 +418,18 @@
                 $('#recent-chats').prepend(`
             <li class="list-group-item user-item" id="chat-${username}" onclick="selectUser('${username}')">
                 <div class="user-details" style="display: flex; flex-direction: column; width: 100%;">
-                    <!-- Username & Timestamp Row -->
                     <div class="up-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                         <strong>@ ${username}</strong>
                         <span class="timestamp text-muted" style="white-space: nowrap; margin-left: auto;">${timestamp}</span>
                     </div>
-                    <!-- Latest Message Below -->
                     <div class="last-message" style="width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
                         ${message}
                     </div>
                 </div>
             </li>
         `);
+        originalChatList = $('#recent-chats').html();
+
             } else {
                 // Update existing chat item
                 chatItem.querySelector('.last-message').textContent = message;
@@ -447,6 +437,7 @@
 
                 // Move the updated chat item to the top
                 $('#recent-chats').prepend(chatItem);
+                originalChatList = $('#recent-chats').html();
             }
         }
 

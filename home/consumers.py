@@ -22,9 +22,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_add(self.room_name, self.channel_name)
         await self.accept()
         
-        print(f"✅ {self.user.username} connected to WebSocket.")
-
-        # Send chat history on connect
         chat_history = await self.get_chat_history()
         await self.send_json({
             "type": "chat.history",
@@ -41,7 +38,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         chat_list = list(chats)
         for chat in chat_list:
             if chat["timestamp"]:  
-                chat["timestamp"] = chat["timestamp"].isoformat()  # Convert datetime to string
+                chat["timestamp"] = chat["timestamp"].isoformat() 
 
         return chat_list
 
@@ -61,7 +58,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             )
             timestamp_str = localtime(chat_instance.timestamp).strftime("%I:%M %p, %d %b %Y")
 
-            # Send message to receiver's room
             await self.channel_layer.group_send(
                 f"room_{receiver_username}",
                 {
@@ -72,7 +68,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 }
             )
 
-            # Send the latest message confirmation
             await self.send_json({
                 "type": "chat.sent",
                 "message": message,
@@ -104,7 +99,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
     async def disconnect(self, close_code):
         if hasattr(self, "user") and self.user.is_authenticated:
-            print(f"❌ {self.user.username} disconnected from WebSocket.")
             await self.channel_layer.group_discard(self.room_name, self.channel_name)
 
 
@@ -122,8 +116,6 @@ class ChatPreviewConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_add(self.room_name, self.channel_name)
         await self.accept()
         
-        print(f"✅ {self.user.username} connected to Chat Preview WebSocket.")
-
     async def receive_json(self, content, **kwargs):
         message_preview = content.get("message_preview")
         receiver_username = content.get("receiver")
@@ -146,7 +138,7 @@ class ChatPreviewConsumer(AsyncJsonWebsocketConsumer):
                     "receiver": receiver_username
                 }
             )
-            return  # Stop further processing          
+            return           
 
     async def chat_preview(self, event):       
         await self.send_json({
@@ -166,5 +158,4 @@ class ChatPreviewConsumer(AsyncJsonWebsocketConsumer):
 
     async def disconnect(self, close_code):
         if hasattr(self, "user") and self.user.is_authenticated:
-            print(f"❌ {self.user.username} disconnected from Chat Preview WebSocket.")
             await self.channel_layer.group_discard(self.room_name, self.channel_name)

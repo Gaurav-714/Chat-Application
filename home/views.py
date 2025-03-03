@@ -1,31 +1,32 @@
 from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
-from django.db.models import Max, Q, Subquery, OuterRef
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q, Subquery, OuterRef, Exists
 from django.http import JsonResponse
 from .models import ChatModel
 
 User = get_user_model()
 
+
 @login_required
 def chat_view(request):
-    query = request.GET.get('q', '').strip()  # Search query for users
-    username = request.GET.get('username', '').strip()  # Username for chat history
+    query = request.GET.get('q', '').strip()
+    username = request.GET.get('username', '').strip() 
 
-    # Fetch all registered users for searching
     user_list = User.objects.values('username')
 
-    # Fetch recent chats with content and timestamp of the lastest message
+    # Subquery: Fetch the latest message per user chat
     latest_message_subquery = ChatModel.objects.filter(
-        Q(sender=OuterRef('pk'), receiver=request.user) | 
+        Q(sender=OuterRef('pk'), receiver=request.user) |
         Q(sender=request.user, receiver=OuterRef('pk'))
-    ).order_by('-timestamp').values('content')[:1]
+    ).order_by('-timestamp')
 
+    # Fetch users with whom the authenticated user has chatted
     recent_chats = User.objects.filter(
-        Q(sent_messages__receiver=request.user) | Q(received_messages__sender=request.user)
+        Exists(latest_message_subquery)
     ).annotate(
-        latest_message_timestamp=Max('sent_messages__timestamp', 'received_messages__timestamp'),
-        latest_message_content=Subquery(latest_message_subquery)
+        latest_message_timestamp=Subquery(latest_message_subquery.values('timestamp')[:1]),
+        latest_message_content=Subquery(latest_message_subquery.values('content')[:1])
     ).order_by('-latest_message_timestamp')
 
     # Handle AJAX requests separately
@@ -47,8 +48,8 @@ def chat_view(request):
             return JsonResponse({'chat_history': chat_data})
 
     context = {
-        'user_list': user_list,       # Full user list for searching
-        'recent_chats': recent_chats, # Users with whom the user has chatted
+        'user_list': user_list,      
+        'recent_chats': recent_chats,
     }
     return render(request, 'index.html', context)
 
