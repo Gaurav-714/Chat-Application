@@ -52,7 +52,3 @@ def chat_view(request):
         'recent_chats': recent_chats,
     }
     return render(request, 'index.html', context)
-
-
-def login_view(request):
-    return render(request, 'login.html')
