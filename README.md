@@ -78,6 +78,7 @@ Ensure you have the following installed:
 
 ## Testing
 - The application has been tested well before this release.
+- All testcases have been tested successfully
 
 ## License
 This project is licensed under the MIT License.
