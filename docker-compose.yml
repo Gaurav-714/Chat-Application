@@ -1,0 +1,19 @@
+services:
+  web:
+    build: .
+    container_name: chat-app
+    command: daphne -b 0.0.0.0 -p 8000 core.asgi:application
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    environment:
+      - DEBUG=True
+      - REDIS_URL=redis://redis:6379/0
+
+  redis:
+    image: redis:7
+    container_name: chat-app-redis
+
